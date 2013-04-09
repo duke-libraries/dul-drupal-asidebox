@@ -1,0 +1,5 @@
+name = Asidebox
+description = Exposes an entry field for an aside box (aka "feature box") when adding content
+core = 7.x
+version = VERSION
+package = Duke University Library UI

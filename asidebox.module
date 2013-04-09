@@ -1,0 +1,190 @@
+<?php
+
+/**
+ * Implements hook_menu()
+ */
+function asidebox_menu() {
+	$menu['admin/config/asidebox'] = array(
+		'title' => 'Aside (Feature) Box',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('asidebox_admin_settings_form'),
+		'access arguments' => array('administer site configuration'),
+		'file' => 'asidebox.admin.inc',
+		'type' => MENU_NORMAL_ITEM,
+	);
+	$menu['sandbox/block_autocomplete'] = array(
+		'title' => 'Block autocomplete',
+		'page callback' => 'asidebox_block_autocomplete',
+		'access callback' => TRUE,
+		'type' => MENU_CALLBACK,
+	);
+	return $menu;
+}
+
+/**
+ * Implements hook_theme()
+ */
+function asidebox_theme() {
+	$theme['asidebox'] = array(
+		'variables' => array('body' => NULL, 'block' => NULL),
+		'template' => 'asidebox',
+	);
+	return $theme;
+}
+
+/**
+ * return a list of blocks that match the criteria
+ * represented by 'string'
+ * -- match the block 'info' at the beginning of the string
+ */
+function asidebox_block_autocomplete($string = '') {
+	global $theme_key;
+	$result = db_query('SELECT DISTINCT b.* FROM {block} b WHERE region <> -1 and theme = :theme_key', array(':theme_key' => $theme_key));
+
+	$blocks = array();
+	$data = array();
+	foreach ($result as $block) {
+		if (!isset($data[$block->module])) {
+			$data[$block->module] = module_invoke($block->module, 'block_info');
+		}
+		$block_title = $data[$block->module][$block->delta]['info'];
+		$pattern = '/^' . $string . '/';
+		if (preg_match($pattern, $block_title) == 1) {
+			$blocks[$block_title . " | {$block->bid}"] = $block_title;
+		}
+	}
+
+	drupal_json_output($blocks);
+}
+
+/**
+ * Implements hook_form_alter()
+ */
+function asidebox_form_alter(&$form, &$form_state, $form_id) {
+	// we should have a list of node types that support this 
+	// feature (admin form)
+
+	// what are the supported node types?
+	$types = variable_get('asidebox_node_types', array('page'));
+	$chunks = explode('_', $form_id);
+	
+	
+	// but for now, practice altering the form
+	if (in_array($chunks[0], $types)) {
+		
+		$asidebox = NULL;
+		if (isset($form_state['node']->vid)) {
+			$vid = $form_state['node']->vid;
+			$asidebox = asidebox_load_asidebox($vid);
+		}
+		if ($asidebox == NULL) {
+			$asidebox = asidebox_new_asidebox();
+		}
+		
+		$form['asidebox'] = array(
+			'#type' => 'fieldset',
+			'#title' => t('Aside (Feature) Box'),
+			'#collapsible' => TRUE,
+			'#collapsed' => TRUE,
+			'#weight' => -10,
+			'#attributes' => array('class' => array('asidebox-field')),
+			'#group' => 'additional_settings',
+			'#attached' => array(
+				'js' => array(
+					'vertical-tabs' => drupal_get_path('module', 'sandbox') . '/asidebox.js',
+				),
+			),
+		);
+		$form['asidebox']['asidebox_status'] = array(
+			'#type' => 'select',
+			'#title' => t('Aside Box Status'),
+			'#required' => TRUE,
+			'#default_value' => $asidebox->status,
+			'#options' => array(
+				'disabled' => t('Disabled'),
+				'block' => t('Use Block'),
+				'html' => t('HTML Content'),
+			),
+			'#attributes' => array('id' => 'asidebox-status'),
+			'#description' => t('Disable the aside box, or specify the type of content.'),
+			'#weight' => 0,
+			'#size' => 1,
+		);
+		$form['asidebox']['asidebox_bid'] = array(
+			'#type' => 'textfield',
+			'#title' => t('Block Title'),
+			'#autocomplete_path' => 'sandbox/block_autocomplete',
+			'#description' => t('Enter the first few letters of the <em>block description</em> to trigger the autocomplete search.'),
+			'#states' => array(
+				'visible' => array(
+					':input[name="asidebox_status"]' => array('value' => 'block'),
+				),
+			),
+		);
+		$form['asidebox']['html_content'] = array(
+			'#type' => 'text_format',
+			'#title' => t('Enter Feature Box Content'),
+			'#rows' => '10',
+			'#default_value' => $asidebox->body_value,
+			'#states' => array(
+				'visible' => array(
+					':input[name="asidebox_status"]' => array('value' => 'html'),
+				),
+			),
+		);
+		$form['#submit'][] = 'asidebox_form_submit_handler';
+	}
+}
+
+/**
+ * Sumbit handler to process the 'asidebox' data entered 
+ * by the end user.
+ */
+function asidebox_form_submit_handler($form, $form_state) {
+	$nid = $form_state['values']['nid'];
+	$vid = $form_state['values']['vid'];
+	
+	$asidebox_status = $form_state['values']['asidebox_status'];
+	
+	$record = new stdClass();
+	$record->nid = $nid;
+	$record->vid = $vid;
+	$record->status = $asidebox_status;
+	
+	if ($asidebox_status == 'html') {
+		$record->body_value = $form_state['values']['html_content']['value'];
+		$record->body_format = $form_state['values']['html_content']['format'];
+	} else if ($asidebox_status == 'block') {
+		$chunk = explode(' | ', $form_state['values']['asidebox_bid']);
+		$record->bid = $chunk[1];
+	}
+	drupal_write_record('asidebox', $record);
+}
+
+function asidebox_load_asidebox($vid) {
+	$result = db_query('SELECT ab.* from {asidebox} ab WHERE vid = :vid', array(':vid' => $vid));
+	return $result->fetchObject();
+}
+
+function asidebox_new_asidebox() {
+	$o = new stdClass();
+	$o->nid = NULL;
+	$o->vid = NULL;
+	$o->status = 'disabled';
+	$o->body_value = '';
+	$o->body_format = NULL;
+	$o->bid = NULL;
+
+	return $o;
+}
+
+function asidebox_node_view($node, $view_mode, $langcode) {
+	$asidebox = asidebox_load_asidebox($node->vid);
+	if ($asidebox != NULL) {
+		$node->content['asidebox_main'] = array(
+			'#theme' => 'asidebox',
+			'#body' => t("Let's do this, baby!!!"),
+			'#weight' => -1,	// make sure it's at the top of the rendering order
+		);
+	}
+}
