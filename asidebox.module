@@ -79,6 +79,9 @@ function asidebox_form_alter(&$form, &$form_state, $form_id) {
 		}
 		if ($asidebox == NULL) {
 			$asidebox = asidebox_new_asidebox();
+			$form_state['asidebox'] = NULL;
+		} else {
+			$form_state['asidebox'] = $asidebox;
 		}
 		
 		$form['asidebox'] = array(
@@ -144,11 +147,18 @@ function asidebox_form_submit_handler($form, $form_state) {
 	$nid = $form_state['values']['nid'];
 	$vid = $form_state['values']['vid'];
 	
+	if ($form_state['asidebox']) {
+		$record = $form_state['asidebox'];
+	} else {
+		$record = new stdClass();
+		$record->nid = $nid;
+		$record->vid = $vid;
+	}
 	$asidebox_status = $form_state['values']['asidebox_status'];
 	
-	$record = new stdClass();
-	$record->nid = $nid;
-	$record->vid = $vid;
+	//$record = new stdClass();
+	//$record->nid = $nid;
+	//$record->vid = $vid;
 	$record->status = $asidebox_status;
 	
 	if ($asidebox_status == 'html') {
@@ -158,7 +168,11 @@ function asidebox_form_submit_handler($form, $form_state) {
 		$chunk = explode(' | ', $form_state['values']['asidebox_bid']);
 		$record->bid = $chunk[1];
 	}
-	drupal_write_record('asidebox', $record);
+	if ($form_state['asidebox']) {
+		drupal_write_record('asidebox', $record, 'vid');
+	} else {
+		drupal_write_record('asidebox', $record);
+	}
 }
 
 function asidebox_load_asidebox($vid) {
