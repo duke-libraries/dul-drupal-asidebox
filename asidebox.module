@@ -94,7 +94,7 @@ function asidebox_form_alter(&$form, &$form_state, $form_id) {
 			'#group' => 'additional_settings',
 			'#attached' => array(
 				'js' => array(
-					'vertical-tabs' => drupal_get_path('module', 'sandbox') . '/asidebox.js',
+					'vertical-tabs' => drupal_get_path('module', 'asidebox') . '/asidebox.js',
 				),
 			),
 		);
