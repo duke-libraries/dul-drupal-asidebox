@@ -66,11 +66,11 @@ function asidebox_form_alter(&$form, &$form_state, $form_id) {
 
 	// what are the supported node types?
 	$types = variable_get('asidebox_node_types', array('page'));
-	$chunks = explode('_', $form_id);
-	
+	$node_type = str_replace('_node_form', '', $form_id);
+	#$chunks = explode('_', $form_id);
 	
 	// but for now, practice altering the form
-	if (in_array($chunks[0], $types)) {
+	if (in_array($node_type, $types)) {
 		
 		$asidebox = NULL;
 		if (isset($form_state['node']->vid)) {
