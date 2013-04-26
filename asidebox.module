@@ -197,7 +197,8 @@ function asidebox_node_view($node, $view_mode, $langcode) {
 	if ($asidebox != NULL) {
 		$node->content['asidebox_main'] = array(
 			'#theme' => 'asidebox',
-			'#body' => t("Let's do this, baby!!!"),
+			'#body' => $asidebox->body_value,
+			// '#body' => t("Let's do this, baby!!!"),
 			'#weight' => -1,	// make sure it's at the top of the rendering order
 		);
 	}
