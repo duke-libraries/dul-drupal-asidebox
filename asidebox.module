@@ -50,7 +50,9 @@ function asidebox_block_autocomplete($string = '') {
 		$block_title = $data[$block->module][$block->delta]['info'];
 		$pattern = '/^' . $string . '/';
 		if (preg_match($pattern, $block_title) == 1) {
-			$blocks[$block_title . " | {$block->bid}"] = $block_title;
+			$key = sprintf('%s|%s|%s', $block->bid, $block->module, $block->delta);
+			$blocks[$key] = $block_title;
+			//$blocks[$block_title . "|{$block->bid}"] = $block_title;
 		}
 	}
 
@@ -67,7 +69,6 @@ function asidebox_form_alter(&$form, &$form_state, $form_id) {
 	// what are the supported node types?
 	$types = variable_get('asidebox_node_types', array('page'));
 	$node_type = str_replace('_node_form', '', $form_id);
-	#$chunks = explode('_', $form_id);
 	
 	// but for now, practice altering the form
 	if (in_array($node_type, $types)) {
@@ -113,7 +114,7 @@ function asidebox_form_alter(&$form, &$form_state, $form_id) {
 			'#weight' => 0,
 			'#size' => 1,
 		);
-		$form['asidebox']['asidebox_bid'] = array(
+		$form['asidebox']['asidebox_block_title'] = array(
 			'#type' => 'textfield',
 			'#title' => t('Block Title'),
 			'#autocomplete_path' => 'sandbox/block_autocomplete',
@@ -123,6 +124,25 @@ function asidebox_form_alter(&$form, &$form_state, $form_id) {
 					':input[name="asidebox_status"]' => array('value' => 'block'),
 				),
 			),
+			'#attached' => array(
+				'js' => array(
+					drupal_get_path('module', 'asidebox') . '/asidebox-block-field.js' => array('type' => 'file'),
+				),
+			),
+		);
+		$form['asidebox']['asidebox_bid'] = array(
+			'#type' => 'hidden',
+			'#default_value' => '',
+		);
+		$form['asidebox']['asidebox_block_delta'] = array(
+			'#type' => 'hidden',
+			'#default_value' => '',
+			'#attributes' => array('id' => 'asideboxBlockDelta'),
+		);
+		$form['asidebox']['asidebox_block_module'] = array(
+			'#type' => 'hidden',
+			'#default_value' => '',
+			'#attributes' => array('id' => 'asideboxBlockModule'),
 		);
 		$form['asidebox']['html_content'] = array(
 			'#type' => 'text_format',
@@ -176,6 +196,8 @@ function asidebox_form_submit_handler($form, $form_state) {
 }
 
 function asidebox_load_asidebox($vid) {
+	// for simple queries, db_query is faster than db_select
+	// http://drupal.org/node/1881146#comment-6907576
 	$result = db_query('SELECT ab.* from {asidebox} ab WHERE vid = :vid', array(':vid' => $vid));
 	return $result->fetchObject();
 }
@@ -195,11 +217,14 @@ function asidebox_new_asidebox() {
 function asidebox_node_view($node, $view_mode, $langcode) {
 	$asidebox = asidebox_load_asidebox($node->vid);
 	if ($asidebox != NULL) {
-		$node->content['asidebox_main'] = array(
-			'#theme' => 'asidebox',
-			'#body' => $asidebox->body_value,
-			// '#body' => t("Let's do this, baby!!!"),
-			'#weight' => -1,	// make sure it's at the top of the rendering order
-		);
+		if ($asidebox->status == 'html') {
+			$node->content['asidebox_main'] = array(
+				'#theme' => 'asidebox',
+				'#body' => $asidebox->body_value,
+				// '#body' => t("Let's do this, baby!!!"),
+				'#weight' => -1,	// make sure it's at the top of the rendering order
+			);
+		} elseif ($asidebox->status == 'block') {
+		}
 	}
 }
