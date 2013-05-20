@@ -50,6 +50,8 @@ function asidebox_block_autocomplete($string = '') {
 		$block_title = $data[$block->module][$block->delta]['info'];
 		$pattern = '/^' . $string . '/';
 		if (preg_match($pattern, $block_title) == 1) {
+			# key is pipe-delimited string
+			# bid|module|delta
 			$key = sprintf('%s|%s|%s', $block->bid, $block->module, $block->delta);
 			$blocks[$key] = $block_title;
 			//$blocks[$block_title . "|{$block->bid}"] = $block_title;
@@ -74,6 +76,7 @@ function asidebox_form_alter(&$form, &$form_state, $form_id) {
 	if (in_array($node_type, $types)) {
 		
 		$asidebox = NULL;
+		$block = NULL;
 		if (isset($form_state['node']->vid)) {
 			$vid = $form_state['node']->vid;
 			$asidebox = asidebox_load_asidebox($vid);
@@ -82,6 +85,9 @@ function asidebox_form_alter(&$form, &$form_state, $form_id) {
 			$asidebox = asidebox_new_asidebox();
 			$form_state['asidebox'] = NULL;
 		} else {
+			if ($asidebox->status == 'block') {
+				$block = block_load($asidebox->block_module, $asidebox->blocK_delta);
+			}
 			$form_state['asidebox'] = $asidebox;
 		}
 		
@@ -117,6 +123,7 @@ function asidebox_form_alter(&$form, &$form_state, $form_id) {
 		$form['asidebox']['asidebox_block_title'] = array(
 			'#type' => 'textfield',
 			'#title' => t('Block Title'),
+			'#attributes' => array('class' => array('asideboxBlockTitle')),
 			'#autocomplete_path' => 'sandbox/block_autocomplete',
 			'#description' => t('Enter the first few letters of the <em>block description</em> to trigger the autocomplete search.'),
 			'#states' => array(
@@ -133,6 +140,7 @@ function asidebox_form_alter(&$form, &$form_state, $form_id) {
 		$form['asidebox']['asidebox_bid'] = array(
 			'#type' => 'hidden',
 			'#default_value' => '',
+			'#attributes' => array('id' => 'asideboxBlockID'),
 		);
 		$form['asidebox']['asidebox_block_delta'] = array(
 			'#type' => 'hidden',
@@ -186,7 +194,9 @@ function asidebox_form_submit_handler($form, $form_state) {
 		$record->body_format = $form_state['values']['html_content']['format'];
 	} else if ($asidebox_status == 'block') {
 		$chunk = explode(' | ', $form_state['values']['asidebox_bid']);
-		$record->bid = $chunk[1];
+		$record->bid = $chunk[0];
+		$record->block_module = $chunk[1];
+		$record->block_delta = $chunk[2];
 	}
 	if ($form_state['asidebox']) {
 		drupal_write_record('asidebox', $record, 'vid');
