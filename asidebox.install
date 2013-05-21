@@ -34,6 +34,16 @@ function asidebox_schema() {
 				'unsigned' => TRUE,
 				'default' => NULL,
 			),
+			'block_module' => array(
+				'type' => 'varchar',
+				'length' => 64,
+				'not null' => FALSE,
+			),
+			'block_delta' => array(
+				'type' => 'varchar',
+				'length' => 32,
+				'not null' => FALSE,
+			),
 			'body_value' => array(
 				'type' => 'text',
 				'default' => NULL,
@@ -71,8 +81,8 @@ function asidebox_schema() {
 /**
  * Implements hook_update_N
  */
-function hook_update_7110() {
-	$ret = array();
-	db_add_field('asidebox', 'block_module', array('type' => 'varchar', 'not null' => FALSE, 'length' => 64));
-	db_add_field('asidebox', 'block_delta', array('type' => 'varchar', 'not null' => FALSE, 'length' => 32));
-}
+//function hook_update_7110() {
+//	$ret = array();
+//	db_add_field('asidebox', 'block_module', array('type' => 'varchar', 'not null' => FALSE, 'length' => 64));
+//	db_add_field('asidebox', 'block_delta', array('type' => 'varchar', 'not null' => FALSE, 'length' => 32));
+//}
