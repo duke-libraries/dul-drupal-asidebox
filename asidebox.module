@@ -220,7 +220,7 @@ function asidebox_form_submit_handler($form, $form_state) {
 function asidebox_node_load($nodes, $types) {
 	// what are the supported node types?
 	$types_we_want = variable_get('asidebox_node_types', array('page'));
-	if (count(array_insersect($types_we_want, $types))) {
+	if (count(array_intersect($types_we_want, $types))) {
 		foreach ($nodes as $node) {
 			$node->asidebox = asidebox_load_asidebox($node->vid);
 		}
