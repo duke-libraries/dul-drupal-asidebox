@@ -65,9 +65,9 @@ function asidebox_block_autocomplete($string = '') {
  * Implements hook_form_alter()
  */
 function asidebox_form_alter(&$form, &$form_state, $form_id) {
-	#if (isset($form_state['node'])) {
-	#	 dpm($form_state['node']);
-	#}
+	if (isset($form_state['node'])) {
+		 dpm($form_state['node']);
+	}
 	// we should have a list of node types that support this 
 	// feature (admin form)
 
@@ -82,7 +82,7 @@ function asidebox_form_alter(&$form, &$form_state, $form_id) {
 		$block_info = NULL;
 		if (isset($form_state['node']->vid)) {
 			$vid = $form_state['node']->vid;
-			$asidebox = asidebox_load_asidebox($vid);
+			$asidebox = asidebox_load_asidebox($form_state['node']->nid, $form_state['node']->vid);
 		}
 		if ($asidebox == NULL) {
 			$asidebox = asidebox_new_asidebox();
@@ -121,7 +121,7 @@ function asidebox_form_alter(&$form, &$form_state, $form_id) {
 				'html' => t('HTML Content'),
 			),
 			'#attributes' => array('id' => 'asidebox-status'),
-			'#description' => t('Disable the aside box, or specify the type of content.'),
+			'#description' => variable_get('asidebox.menu_help', t('Disable the aside box, or specify the type of content.')),
 			'#weight' => 0,
 			'#size' => 1,
 		);
@@ -182,6 +182,7 @@ function asidebox_form_submit_handler($form, $form_state) {
 	
 	$nid = $form_state['values']['nid'];
 	$vid = $form_state['values']['vid'];
+	error_log('*** vid = [' . $vid . ']; nid = [' . $nid . '] ***');
 	
 	if ($form_state['asidebox']) {
 		$record = $form_state['asidebox'];
@@ -205,13 +206,19 @@ function asidebox_form_submit_handler($form, $form_state) {
 	}
 	// TODO add support for menus(?)
 	
-	if ($form_state['asidebox']) {
+	if ($form_state['asidebox'] && !$form_state['node']->revision) {
+		error_log("asidebox exists || revision = FALSE");
 		drupal_write_record('asidebox', $record, 'vid');
 		$form_state['node']->asidebox->is_new = FALSE;
 	} else {
+		error_log("form_state['node']['revision'] = [" . $form_state['node']->revision . "]");
 		// either hook_node_insert or hook_node_update will catch this case
 		$form_state['node']->asidebox = $record;
-		$form_state['node']->asidebox->is_new = isset($form_state['asidebox']) ? FALSE : TRUE;
+		$form_state['node']->asidebox->is_new = 
+			(isset($form_state['asidebox']) && !$form_state['node']->revision) 
+			? FALSE 
+			: TRUE;
+		error_log("is_new = [" . $form_state['node']->asidebox->is_new . "]");
 	}
 }
 
@@ -223,7 +230,7 @@ function asidebox_node_load($nodes, $types) {
 	$types_we_want = variable_get('asidebox_node_types', array('page'));
 	if (count(array_intersect($types_we_want, $types))) {
 		foreach ($nodes as $node) {
-			$node->asidebox = asidebox_load_asidebox($node->vid);
+			$node->asidebox = asidebox_load_asidebox($node->nid, $node->vid);
 		}
 	}
 }
@@ -261,16 +268,23 @@ function asidebox_node_update($node) {
  * ..to remove the record in {asidebox} that is related to this node
  */
 function asidebox_node_delete($node) {
-	$vid = $node->vid;
+	#$vid = $node->vid;
+	$nid = $node->nid;
 	$num_deleted = db_delete('asidebox')
-		->condition('vid', $vid)
+		->condition('nid', $nid)
 		->execute();
 }
 
-function asidebox_load_asidebox($vid) {
+function asidebox_load_asidebox($nid, $vid) {
 	// for simple queries, db_query is faster than db_select
 	// http://drupal.org/node/1881146#comment-6907576
-	$result = db_query('SELECT ab.* from {asidebox} ab WHERE vid = :vid', array(':vid' => $vid));
+
+	// modified to account for node revisions
+	if (variable_get('asidebox.follow_new_revisions', 0)) {
+		$result = db_query('SELECT ab.* from {asidebox} ab WHERE nid = :nid', array(':nid' => $nid));
+	} else {
+		$result = db_query('SELECT ab.* from {asidebox} ab WHERE vid = :vid', array(':vid' => $vid));
+	}
 	return $result->fetchObject();
 }
 
@@ -287,7 +301,7 @@ function asidebox_new_asidebox() {
 }
 
 function asidebox_node_view($node, $view_mode, $langcode) {
-	$asidebox = asidebox_load_asidebox($node->vid);
+	$asidebox = asidebox_load_asidebox($node->nid, $node->vid);
 	if ($asidebox != NULL) {
 		if ($asidebox->status == 'html') {
 			$node->content['asidebox_main'] = array(
