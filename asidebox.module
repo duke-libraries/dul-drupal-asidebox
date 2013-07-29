@@ -65,9 +65,9 @@ function asidebox_block_autocomplete($string = '') {
  * Implements hook_form_alter()
  */
 function asidebox_form_alter(&$form, &$form_state, $form_id) {
-	if (isset($form_state['node'])) {
-		 dpm($form_state['node']);
-	}
+	//if (isset($form_state['node'])) {
+	//	 dpm($form_state['node']);
+	//}
 	// we should have a list of node types that support this 
 	// feature (admin form)
 
@@ -182,7 +182,6 @@ function asidebox_form_submit_handler($form, $form_state) {
 	
 	$nid = $form_state['values']['nid'];
 	$vid = $form_state['values']['vid'];
-	error_log('*** vid = [' . $vid . ']; nid = [' . $nid . '] ***');
 	
 	if ($form_state['asidebox']) {
 		$record = $form_state['asidebox'];
@@ -207,18 +206,15 @@ function asidebox_form_submit_handler($form, $form_state) {
 	// TODO add support for menus(?)
 	
 	if ($form_state['asidebox'] && !$form_state['node']->revision) {
-		error_log("asidebox exists || revision = FALSE");
 		drupal_write_record('asidebox', $record, 'vid');
 		$form_state['node']->asidebox->is_new = FALSE;
 	} else {
-		error_log("form_state['node']['revision'] = [" . $form_state['node']->revision . "]");
 		// either hook_node_insert or hook_node_update will catch this case
 		$form_state['node']->asidebox = $record;
 		$form_state['node']->asidebox->is_new = 
 			(isset($form_state['asidebox']) && !$form_state['node']->revision) 
 			? FALSE 
 			: TRUE;
-		error_log("is_new = [" . $form_state['node']->asidebox->is_new . "]");
 	}
 }
 
