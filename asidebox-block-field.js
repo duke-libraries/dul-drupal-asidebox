@@ -6,13 +6,13 @@
 		attach: function (context, settings) {
 			if (Drupal.jsAC) {
 				Drupal.jsAC.prototype.select = function(node) {
-					var $blockModuleField = $('#asideboxBlockModule'),
-							$blockDeltaField = $('#asideboxBlockDelta');
+					var $blockModuleField = $('#asideboxmodulefield'),
+							$blockDeltaField = $('#asideboxblockdelta');
 					
 					pieces = $(node).data('autocompleteValue').split('|');
 					$blockModuleField.attr('defaultValue', pieces[1]);
 					$blockDeltaField.attr('defaultValue', pieces[2]);
-					$('#asideboxBlockID').attr('defaultValue', pieces[0]);
+					$('#asideboxblockid').attr('defaultValue', pieces[0]);
 
 					$(this.input).val( $(node).text() );
 
