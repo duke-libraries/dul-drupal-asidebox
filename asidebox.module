@@ -131,10 +131,13 @@ function asidebox_form_alter(&$form, &$form_state, $form_id) {
 		$block_list = array('-- Select a block --');
 		$block_rehash = _block_rehash($theme);
 		foreach($block_rehash as $b) {
-			if ($b['visibility']) {
+			$bool = _asidebox_block_available($b);
+			if ($bool) {
+				# watchdog('asidebox - form', $b['module'] . ' | ' . $b['info']);
 				$aKey = $b['bid'] . '|' . $b['module'] . '|' . $b['delta'];
 				$block_list[$aKey] = $b['info'];
 			}
+			# removed the 'visibility' logic test (8/19/2013) dlc
 		}
 		
 		//dpm($blocks);
@@ -198,6 +201,18 @@ function asidebox_form_alter(&$form, &$form_state, $form_id) {
 			'#title' => t('Enter Feature Box Content'),
 			'#rows' => '10',
 			'#default_value' => $asidebox->body_value,
+			'#states' => array(
+				'visible' => array(
+					':input[name="asidebox_status"]' => array('value' => 'html'),
+				),
+			),
+		);
+		$form['asidebox']['html_title'] = array(
+			'#type' => 'textfield',
+			'#size' => 40,
+			'#title' => t('Optional Title'),
+			'#description' => t('This will appear as on H3 element on the rendered page'),
+			'#default_value' => isset($asidebox->body_title) ? $asidebox->body_title : '',
 			'#states' => array(
 				'visible' => array(
 					':input[name="asidebox_status"]' => array('value' => 'html'),
@@ -374,4 +389,27 @@ function asidebox_node_view($node, $view_mode, $langcode) {
 			// $render_array
 		}
 	}
+}
+
+function _asidebox_block_available($block) {
+	$type = variable_get('asidebox.block_types', 'menus_custom');
+
+	$filter_vis = variable_get('asidebox.filter_visibility', 0);
+	$type_passes = FALSE;
+	$vis_passes = FALSE;
+
+	if ($type == 'menus_custom') {
+		$type_passes = in_array($block['module'], array('menu', 'block'));
+	}
+	else if ($type == 'menus') {
+		$type_passes = ($block['module'] == 'menu');
+	}
+	else if ($type == 'custom') {
+		$type_passes = ($block['module'] == 'block');
+	}
+	else if ($type == 'all') {
+		$type_passes = TRUE;
+	}
+	$vis_passes = ($filter_vis == 0) || ($filter_vis && $block['visibililty']);
+	return $type_passes && $vis_passes;
 }
