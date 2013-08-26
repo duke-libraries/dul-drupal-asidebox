@@ -26,7 +26,7 @@ function asidebox_menu() {
  */
 function asidebox_theme() {
 	$theme['asidebox'] = array(
-		'variables' => array('body' => NULL, 'block' => NULL),
+		'variables' => array('body' => NULL, 'title' => NULL, 'block' => NULL),
 		'template' => 'asidebox',
 	);
 	return $theme;
@@ -246,6 +246,7 @@ function asidebox_form_submit_handler($form, $form_state) {
 	if ($asidebox_status == 'html') {
 		$record->body_value = $form_state['values']['html_content']['value'];
 		$record->body_format = $form_state['values']['html_content']['format'];
+		$record->body_title = $form_state['values']['html_title'];
 
 	} else if ($asidebox_status == 'block') {
 		$record->bid = $form_state['values']['asidebox_bid'];
@@ -340,6 +341,7 @@ function asidebox_load_asidebox($nid, $vid, $node_revision = FALSE) {
 	// modified to account for node revisions
 	//if (variable_get('asidebox.follow_new_revisions', 0)) {
 	$result = db_query('select ab.* from {asidebox} ab where nid = :nid and vid = :vid', array(':nid' => $nid, ':vid' => $vid));
+	$asidebox = $result->fetchObject();
 	/*
 	if (!$node_revision) {
 		$result = db_query('select ab.* from {asidebox} ab where nid = :nid', array(':nid' => $nid));
@@ -347,7 +349,8 @@ function asidebox_load_asidebox($nid, $vid, $node_revision = FALSE) {
 		$result = db_query('select ab.* from {asidebox} ab where vid = :vid', array(':vid' => $vid));
 	}
 	*/
-	return $result->fetchObject();
+	//return $result->fetchObject();
+	return $asidebox;
 }
 
 function asidebox_new_asidebox() {
@@ -369,6 +372,7 @@ function asidebox_node_view($node, $view_mode, $langcode) {
 			$node->content['asidebox_main'] = array(
 				'#theme' => 'asidebox',
 				'#body' => $asidebox->body_value,
+				'#title' => $asidebox->body_title,
 				// '#body' => t("let's do this, baby!!!"),
 				'#weight' => -1,	// make sure it's at the top of the rendering order
 			);
@@ -378,7 +382,6 @@ function asidebox_node_view($node, $view_mode, $langcode) {
 			// http://drupal.org/node/957038#comment-4856536
 			$block = block_load($asidebox->block_module, $asidebox->block_delta);
 			$render_array = _block_get_renderable_array(_block_render_blocks(array($block)));
-			//dpm($render_array);
 			$node->content['asidebox_main'] = array(
 				'#theme' => 'asidebox',
 				'#body' => render($render_array),

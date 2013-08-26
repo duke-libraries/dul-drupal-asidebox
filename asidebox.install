@@ -53,6 +53,11 @@ function asidebox_schema() {
 				'length' => '255',
 				'default' => NULL,
 			),
+			'body_title' => array(
+				'type' => 'varchar',
+				'length' => '255',
+				'default' => '',
+			),
 		),
     'indexes' => array(
       'nid' => array('nid'),
@@ -79,7 +84,7 @@ function asidebox_schema() {
 }
 
 /**
- * Implements hook_update_N
+ * 
  */
 function hook_update_7110() {
 	$ret = array();
@@ -87,3 +92,11 @@ function hook_update_7110() {
 	//db_add_field('asidebox', 'block_delta', array('type' => 'varchar', 'not null' => FALSE, 'length' => 32));:
 	error_log("executed hook_update_7110...");
 }
+
+/**
+ * Add 'body_title' column to asidebox table
+ */
+function asidebox_update_7120() {
+	db_add_field('asidebox', 'body_title', array('type' => 'varchar', 'length' => 255, 'default' => ''));
+}
+
