@@ -38,14 +38,14 @@ function asidebox_admin_settings_form() {
 		'#weight' => -10,
 	);
 	$form['block_options']['block_types'] = array(
-		'#type' => 'select',
+		'#type' => 'checkboxes',
 		'#options' => array(
-			'menus_custom' => t('User-defined and/or Menu Blocks'),
-			'menus' => t('Menu blocks only'),
-			'custom' => t('User-defined blocks only'),
-			'all' => t('All Blocks'),
+			'menu' => t('Menu blocks'),
+			'block' => t('User-defined blocks'),
+			'aggregator' => t('RSS Feed blocks'),
+			'search' => t('Search-related block(s)'),
 		),
-		'#default_value' => variable_get('asidebox.block_types', 'menus_custom'),
+		'#default_value' => variable_get('asidebox.block_types', array('menus_custom')),
 		'#title' => t('Blocks To Use'),
 		'#description' => t('Select the types of blocks that will be available for content editors to choose from'),
 	);
@@ -73,7 +73,14 @@ function asidebox_admin_settings_form_submit($form, $form_state) {
 	variable_set('asidebox_node_types', $options);
 	variable_set('asidebox.follow_new_revisions', $form_state['values']['follow_revisions']);
 	variable_set('asidebox.menu_help', $form_state['values']['menu_help_text']);
-	variable_set('asidebox.block_types', $form_state['values']['block_types']);
+	$block_types = array();
+	foreach ($form_state['values']['block_types'] as $key => $option) {
+		if ($option) {
+			$block_types[] = $key;
+		}
+	}
+	variable_set('asidebox.block_types', $block_types);
+	#variable_set('asidebox.block_types', $form_state['values']['block_types']);
 	#error_log('follow_revisions = [' . $form_state['values']['follow_revisions'] . ']');
 	drupal_set_message(t('Your changes have been saved.'));
 }
