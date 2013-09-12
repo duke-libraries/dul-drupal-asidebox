@@ -100,3 +100,12 @@ function asidebox_update_7120() {
 	db_add_field('asidebox', 'body_title', array('type' => 'varchar', 'length' => 255, 'default' => ''));
 }
 
+/**
+ * Update the asidebox.block_type variable
+ */
+function asidebox_update_7121() {
+	$t = variable_get('asidebox.block_types');
+	if (!is_array($t)) {
+		variable_set('asidebox.block_types', array('block','menu'));
+	}
+}
