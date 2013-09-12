@@ -395,12 +395,15 @@ function asidebox_node_view($node, $view_mode, $langcode) {
 }
 
 function _asidebox_block_available($block) {
-	$type = variable_get('asidebox.block_types', 'menus_custom');
-
-	$filter_vis = variable_get('asidebox.filter_visibility', 0);
 	$type_passes = FALSE;
 	$vis_passes = FALSE;
+	
+	$acceptable_block_types = variable_get('asidebox.block_types', array());
+	$type_passes = in_array($block['module'], $acceptable_block_types);
 
+	$filter_vis = variable_get('asidebox.filter_visibility', 0);
+
+	/*
 	if ($type == 'menus_custom') {
 		$type_passes = in_array($block['module'], array('menu', 'block'));
 	}
@@ -413,6 +416,7 @@ function _asidebox_block_available($block) {
 	else if ($type == 'all') {
 		$type_passes = TRUE;
 	}
+	*/
 	$vis_passes = ($filter_vis == 0) || ($filter_vis && $block['visibililty']);
 	return $type_passes && $vis_passes;
 }
