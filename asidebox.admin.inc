@@ -42,6 +42,7 @@ function asidebox_admin_settings_form() {
 		'#options' => array(
 			'menu' => t('Menu blocks'),
 			'block' => t('User-defined blocks'),
+			'views' => t('view-blocks'),
 			'aggregator' => t('RSS Feed blocks'),
 			'search' => t('Search-related block(s)'),
 		),
