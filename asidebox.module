@@ -2,6 +2,7 @@
 
 /**
  * Implements hook_menu()
+ * NOTE: the 'asidebox/block_autocomplete' path is deprecated
  */
 function asidebox_menu() {
 	$menu['admin/config/asidebox'] = array(
@@ -36,6 +37,7 @@ function asidebox_theme() {
  * return a list of blocks that match the criteria
  * represented by 'string'
  * -- match the block 'info' at the beginning of the string
+ * DEPRECATED -- 
  */
 function asidebox_block_autocomplete($string = '') {
 	global $theme_key;
@@ -49,6 +51,7 @@ function asidebox_block_autocomplete($string = '') {
 		}
 		$block_title = $data[$block->module][$block->delta]['info'];
 		$pattern = '/^' . $string . '/';
+		
 		if (preg_match($pattern, $block_title) == 1) {
 			# key is pipe-delimited string
 			# bid|module|delta
@@ -65,11 +68,6 @@ function asidebox_block_autocomplete($string = '') {
  * Implements hook_form_alter()
  */
 function asidebox_form_alter(&$form, &$form_state, $form_id) {
-	//if (isset($form_state['node'])) {
-	//	 dpm($form_state['node']);
-	//}
-	// we should have a list of node types that support this 
-	// feature (admin form)
 
 	// what are the supported node types?
 	$types = variable_get('asidebox_node_types', array('page'));
@@ -133,7 +131,6 @@ function asidebox_form_alter(&$form, &$form_state, $form_id) {
 		foreach($block_rehash as $b) {
 			$bool = _asidebox_block_available($b);
 			if ($bool) {
-				# watchdog('asidebox - form', $b['module'] . ' | ' . $b['info']);
 				$aKey = $b['bid'] . '|' . $b['module'] . '|' . $b['delta'];
 				$block_list[$aKey] = $b['info'];
 			}
@@ -160,27 +157,7 @@ function asidebox_form_alter(&$form, &$form_state, $form_id) {
 				),
 			),
 		);
-		/*
-		$form['asidebox']['asidebox_block_title'] = array(
-			'#type' => 'textfield',
-			'#title' => t('Block title'),
-			'#default_value' => !empty($block_info) ? $block_info[$asidebox->block_delta]['info'] : '',
-			'#attributes' => array('class' => array('asideboxblocktitle')),
-			'#autocomplete_path' => 'asidebox/block_autocomplete',
-			'#description' => t('enter the first few letters of the <em>block description</em> to trigger the autocomplete search.'),
 
-			'#states' => array(
-				'visible' => array(
-					':input[name="asidebox_status"]' => array('value' => 'block'),
-				),
-			),
-			'#attached' => array(
-				'js' => array(
-					drupal_get_path('module', 'asidebox') . '/asidebox-block-field.js' => array('type' => 'file'),
-				),
-			),
-		);
-		*/
 		$form['asidebox']['asidebox_bid'] = array(
 			'#type' => 'hidden',
 			'#default_value' => !empty($block_info) ? $asidebox->bid : '',
@@ -253,7 +230,7 @@ function asidebox_form_submit_handler($form, $form_state) {
 		$record->block_module = $form_state['values']['asidebox_block_module'];
 		$record->block_delta = $form_state['values']['asidebox_block_delta'];
 	}
-	// todo add support for menus(?)
+	// TODO add support for menus(?)
 
 	if ($form_state['asidebox']) {
 		$form_state['node']->asidebox = $record;
@@ -262,21 +239,6 @@ function asidebox_form_submit_handler($form, $form_state) {
 		$form_state['node']->asidebox = $record;
 		$form_state['node']->asidebox->is_new = TRUE;
 	}
-	/*
-	if ($form_state['asidebox'] && !$form_state['node']->revision) {
-		error_log("**** revision is false ****");
-		drupal_write_record('asidebox', $record, 'vid');
-		$form_state['node']->asidebox->is_new = false;
-	} else {
-		// either hook_node_insert or hook_node_update will catch this case
-		error_log("**** revision test didn't perform ****");
-		$form_state['node']->asidebox = $record;
-		$form_state['node']->asidebox->is_new = 
-			(isset($form_state['asidebox']) && !$form_state['node']->revision) 
-			? false 
-			: true;
-	}
-	*/
 }
 
 /**
@@ -342,14 +304,7 @@ function asidebox_load_asidebox($nid, $vid, $node_revision = FALSE) {
 	//if (variable_get('asidebox.follow_new_revisions', 0)) {
 	$result = db_query('select ab.* from {asidebox} ab where nid = :nid and vid = :vid', array(':nid' => $nid, ':vid' => $vid));
 	$asidebox = $result->fetchObject();
-	/*
-	if (!$node_revision) {
-		$result = db_query('select ab.* from {asidebox} ab where nid = :nid', array(':nid' => $nid));
-	} else {
-		$result = db_query('select ab.* from {asidebox} ab where vid = :vid', array(':vid' => $vid));
-	}
-	*/
-	//return $result->fetchObject();
+
 	return $asidebox;
 }
 
@@ -365,6 +320,9 @@ function asidebox_new_asidebox() {
 	return $o;
 }
 
+/**
+ * Implements hook_node_view
+ */
 function asidebox_node_view($node, $view_mode, $langcode) {
 	$asidebox = asidebox_load_asidebox($node->nid, $node->vid);
 	if ($asidebox != null) {
@@ -381,19 +339,24 @@ function asidebox_node_view($node, $view_mode, $langcode) {
 			// http://www.computerminds.co.uk/drupal-code/render-block-programmatically
 			// http://drupal.org/node/957038#comment-4856536
 			$block = block_load($asidebox->block_module, $asidebox->block_delta);
+			
+			# get the block's render array...
 			$render_array = _block_get_renderable_array(_block_render_blocks(array($block)));
+			
+			# then add it to the node's content...
 			$node->content['asidebox_main'] = array(
 				'#theme' => 'asidebox',
 				'#body' => render($render_array),
 				'#weight' => -1,
 			);
-
-			// $block = block_load($module, $delta);
-			// $render_array
 		}
 	}
 }
 
+/**
+ * Determines if $block is visible and can be selected through the node
+ * content form
+ */
 function _asidebox_block_available($block) {
 	$type_passes = FALSE;
 	$vis_passes = FALSE;
@@ -403,20 +366,6 @@ function _asidebox_block_available($block) {
 
 	$filter_vis = variable_get('asidebox.filter_visibility', 0);
 
-	/*
-	if ($type == 'menus_custom') {
-		$type_passes = in_array($block['module'], array('menu', 'block'));
-	}
-	else if ($type == 'menus') {
-		$type_passes = ($block['module'] == 'menu');
-	}
-	else if ($type == 'custom') {
-		$type_passes = ($block['module'] == 'block');
-	}
-	else if ($type == 'all') {
-		$type_passes = TRUE;
-	}
-	*/
 	$vis_passes = ($filter_vis == 0) || ($filter_vis && $block['visibililty']);
 	return $type_passes && $vis_passes;
 }
