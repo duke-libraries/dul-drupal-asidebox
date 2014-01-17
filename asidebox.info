@@ -1,4 +1,4 @@
 name = Asidebox
-description = Exposes an entry field for an aside box (aka "feature box") when adding content
+description = Helpful content-related module by Derrek Croney of Duke University Library ITS.
 core = 7.x
 package = Duke University Library UI

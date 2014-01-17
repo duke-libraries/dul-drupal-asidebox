@@ -1,5 +1,18 @@
 <?php
+/**
+ * @file
+ * This file contains the administrative settings form
+ * Using this form allows Site Administrators to:
+ * - Select which contact types that will use an Asidebox
+ *
+ */
 
+/**
+ * Returns a form for Asidebox Administrative settings:
+ * - content types that can use the asidebox
+ * - follow node revisions
+ * - types of blocks that can be selected in node form
+ */
 function asidebox_admin_settings_form() {
 	$form = array();
 	
@@ -64,6 +77,9 @@ function asidebox_admin_settings_form() {
 	return $form;
 }
 
+/**
+ * Submit handler for Asidebox Admin Settings
+ */
 function asidebox_admin_settings_form_submit($form, $form_state) {
 	$options = array();
 	foreach ($form_state['values']['asidebox_node_types'] as $key => $value) {
@@ -71,18 +87,20 @@ function asidebox_admin_settings_form_submit($form, $form_state) {
 			$options[] = $key;
 		}
 	}
+
 	variable_set('asidebox_node_types', $options);
 	variable_set('asidebox.follow_new_revisions', $form_state['values']['follow_revisions']);
 	variable_set('asidebox.menu_help', $form_state['values']['menu_help_text']);
+
 	$block_types = array();
 	foreach ($form_state['values']['block_types'] as $key => $option) {
 		if ($option) {
 			$block_types[] = $key;
 		}
 	}
+
 	variable_set('asidebox.block_types', $block_types);
-	#variable_set('asidebox.block_types', $form_state['values']['block_types']);
-	#error_log('follow_revisions = [' . $form_state['values']['follow_revisions'] . ']');
+
 	drupal_set_message(t('Your changes have been saved.'));
 }
 	
