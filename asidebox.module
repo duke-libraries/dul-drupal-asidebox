@@ -130,6 +130,15 @@ function asidebox_form_alter(&$form, &$form_state, $form_id) {
 		global $theme;
 		$block_list = array('-- Select a block --');
 		$block_rehash = _block_rehash($theme);
+		$callback = function($a, $b) {
+			$stra = strtoupper($a['info']);
+			$strb = strtoupper($b['info']);
+			if ($stra == $strb) {
+				return 0;
+			}
+			return ($stra < $strb) ? -1 : 1;
+		};
+		usort($block_rehash, $callback);
 		foreach($block_rehash as $b) {
 			$bool = _asidebox_block_available($b);
 			if ($bool) {
