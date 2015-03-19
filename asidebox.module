@@ -74,6 +74,72 @@ function asidebox_block_autocomplete($string = '') {
 }
 
 /**
+ * Implements hook_form_alter() for "node_type_form"
+ */
+function asidebox_form_node_type_form_alter(&$form, &$form_state) {
+	$types = variable_get('asidebox_node_types', array('page'));
+	$node_type = $form['#node_type']->type;
+
+	$form['asidebox'] = array(
+		'#type' => 'fieldset',
+		'#title' => t('Aside (Feature) Box'),
+		'#collapsible' => TRUE,
+		'#collapsed' => TRUE,
+		'#weight' => -10,
+		'#attributes' => array('class' => array('asidebox-field')),
+		'#group' => 'additional_settings',
+		'#attached' => array(
+			'js' => array(
+				'vertical-tabs' => drupal_get_path('module', 'asidebox') . '/asidebox.js',
+			),
+		),
+	);
+	$expose_asidebox_default = in_array($node_type, $types) ? 1 : 0;
+	$form['asidebox']['expose_asidebox'] = array(
+		'#type' => 'checkbox',
+		'#title' => t('Enable Asidebox for this content type'),
+		'#required' => FALSE,
+		'#default_value' => $expose_asidebox_default,
+		'#attributes' => array('id' => 'expose-asidebox'),
+		'#weight' => 0,
+		'#size' => 1,
+		'#suffix' => '<div><img width="300" src="/sites/default/files/dul/dul-page-with-asidebox.png" /></div>',
+	);
+	
+	// define the callback function which will be used to save the data
+	$form['#submit'][] = 'asidebox_form_node_type_form_alter_submit';
+}
+
+function asidebox_form_node_type_form_alter_submit($form, $form_state) {
+	// this is the function where we save the end user's input
+	// in regards to the asidebox preference.
+	$values = $form_state['values'];
+	$node_types = variable_get('asidebox_node_types', array('page'));
+	
+	$changed = FALSE;
+	$status = array('@status' => '');
+	if (in_array($values['type'], $node_types) && $values['expose_asidebox'] == '0') {
+		$pos = array_search($values['type'], $node_types);
+		array_splice($node_types, $pos, 1);
+		$changed = TRUE;
+		$status['@status'] = 'disabled';
+	} else {
+		if (!in_array($values['type'], $node_types) && $values['expose_asidebox'] == '1') {
+			array_push($node_types, $values['type']);
+		}
+		$changed = TRUE;
+		$status['@status'] = 'enabled';
+	}
+	
+	#dpm($form_state['values']);
+	#dpm($node_types);
+	variable_set('asidebox_node_types', $node_types);
+	if ($changed) {
+		drupal_set_message(t('Asidebox support has been @status.', $status));
+	}
+}
+
+/**
  * Implements hook_form_alter().
  *
  * Adds a vertical tab section allowing content editors
@@ -264,6 +330,7 @@ function asidebox_form_submit_handler($form, $form_state) {
 		$form_state['node']->asidebox = $record;
 		$form_state['node']->asidebox->is_new = TRUE;
 	}
+	
 }
 
 /**
