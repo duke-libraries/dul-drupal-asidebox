@@ -1,0 +1,111 @@
+<?php
+
+/**
+ * Implements hook_schema()
+ */
+function asidebox_schema() {
+	$schema = array();
+	
+	$schema['asidebox'] = array(
+		'description' => 'Store aside box data for supported content types',
+		'fields' => array(
+      'vid' => array(
+        'description' => 'The {node}.vid of the product.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'nid' => array(
+        'description' => 'The {node}.nid of the product.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+			'status' => array(
+				'type' => 'varchar',
+				'length' => '8',
+				'default' => '',
+				'not null' => TRUE,
+			),
+			'bid' => array(
+				'type' => 'int',
+				'unsigned' => TRUE,
+				'default' => NULL,
+			),
+			'block_module' => array(
+				'type' => 'varchar',
+				'length' => 64,
+				'not null' => FALSE,
+			),
+			'block_delta' => array(
+				'type' => 'varchar',
+				'length' => 32,
+				'not null' => FALSE,
+			),
+			'body_value' => array(
+				'type' => 'text',
+				'default' => NULL,
+			),
+			'body_format' => array(
+				'type' => 'varchar',
+				'length' => '255',
+				'default' => NULL,
+			),
+			'body_title' => array(
+				'type' => 'varchar',
+				'length' => '255',
+				'default' => '',
+			),
+		),
+    'indexes' => array(
+      'nid' => array('nid'),
+			'bid' => array('bid'),
+    ),
+    'primary key' => array('vid'),
+    'foreign keys' => array(
+			'block' => array(
+				'table' => 'block',
+				'columns' => array(
+					'bid' => 'bid',
+				),
+			),
+      'node' => array(
+        'table' => 'node',
+        'columns' => array(
+          'nid' => 'nid',
+          'vid' => 'vid',
+        ),
+      ),
+    ),
+	);
+	return $schema;
+}
+
+/**
+ * 
+ */
+function hook_update_7110() {
+	$ret = array();
+	//db_add_field('asidebox', 'block_module', array('type' => 'varchar', 'not null' => FALSE, 'length' => 64));
+	//db_add_field('asidebox', 'block_delta', array('type' => 'varchar', 'not null' => FALSE, 'length' => 32));:
+	error_log("executed hook_update_7110...");
+}
+
+/**
+ * Add 'body_title' column to asidebox table
+ */
+function asidebox_update_7120() {
+	db_add_field('asidebox', 'body_title', array('type' => 'varchar', 'length' => 255, 'default' => ''));
+}
+
+/**
+ * Update the asidebox.block_type variable
+ */
+function asidebox_update_7121() {
+	$t = variable_get('asidebox.block_types');
+	if (!is_array($t)) {
+		variable_set('asidebox.block_types', array('block','menu'));
+	}
+}

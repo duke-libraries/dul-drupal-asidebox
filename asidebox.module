@@ -1,0 +1,464 @@
+<?php
+/**
+ * @file
+ * Asidebox primary module file.
+ *
+ * The administrative settings forms reside in asidebox.admin.inc.  This file 
+ * contains not much more than hook implementations and some 
+ * convenience functions.
+ */
+
+/**
+ * Implements hook_menu()
+ * NOTE: the 'asidebox/block_autocomplete' path is deprecated
+ */
+function asidebox_menu() {
+	$menu['admin/config/asidebox'] = array(
+		'title' => 'Aside (Feature) Box',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('asidebox_admin_settings_form'),
+		'access arguments' => array('administer site configuration'),
+		'file' => 'asidebox.admin.inc',
+		'type' => MENU_NORMAL_ITEM,
+	);
+	$menu['asidebox/block_autocomplete'] = array(
+		'title' => 'Block autocomplete',
+		'page callback' => 'asidebox_block_autocomplete',
+		'access callback' => TRUE,
+		'type' => MENU_CALLBACK,
+	);
+	return $menu;
+}
+
+/**
+ * Implements hook_theme()
+ */
+function asidebox_theme() {
+	$theme['asidebox'] = array(
+		'variables' => array('body' => NULL, 'title' => NULL, 'block' => NULL),
+		'template' => 'asidebox',
+	);
+	return $theme;
+}
+
+/**
+ * return a list of blocks that match the criteria
+ * represented by 'string'
+ * -- match the block 'info' at the beginning of the string
+ * DEPRECATED -- however the code represents a good
+ * example of 'drupal_json_output()'
+ */
+function asidebox_block_autocomplete($string = '') {
+	global $theme_key;
+	$result = db_query('SELECT DISTINCT b.* FROM {block} b WHERE region <> -1 and theme = :theme_key', array(':theme_key' => $theme_key));
+
+	$blocks = array();
+	$data = array();
+	foreach ($result as $block) {
+		if (!isset($data[$block->module])) {
+			$data[$block->module] = module_invoke($block->module, 'block_info');
+		}
+		$block_title = $data[$block->module][$block->delta]['info'];
+		$pattern = '/^' . $string . '/';
+		
+		if (preg_match($pattern, $block_title) == 1) {
+			# key is pipe-delimited string
+			# bid|module|delta
+			$key = sprintf('%s|%s|%s', $block->bid, $block->module, $block->delta);
+			$blocks[$key] = $block_title;
+			//$blocks[$block_title . "|{$block->bid}"] = $block_title;
+		}
+	}
+
+	drupal_json_output($blocks);
+}
+
+/**
+ * Implements hook_form_alter() for "node_type_form"
+ */
+function asidebox_form_node_type_form_alter(&$form, &$form_state) {
+	$types = variable_get('asidebox_node_types', array('page'));
+	$node_type = $form['#node_type']->type;
+
+	$form['asidebox'] = array(
+		'#type' => 'fieldset',
+		'#title' => t('Aside (Feature) Box'),
+		'#collapsible' => TRUE,
+		'#collapsed' => TRUE,
+		'#weight' => -10,
+		'#attributes' => array('class' => array('asidebox-field')),
+		'#group' => 'additional_settings',
+		'#attached' => array(
+			'js' => array(
+				'vertical-tabs' => drupal_get_path('module', 'asidebox') . '/asidebox.js',
+			),
+		),
+	);
+	$expose_asidebox_default = in_array($node_type, $types) ? 1 : 0;
+	$asidebox_image_preview_url = drupal_get_path('module', 'asidebox') . '/assets/images/dul-page-with-asidebox.png';
+	
+	$form['asidebox']['expose_asidebox'] = array(
+		'#type' => 'checkbox',
+		'#title' => t('Enable Asidebox for this content type'),
+		'#required' => FALSE,
+		'#default_value' => $expose_asidebox_default,
+		'#attributes' => array('id' => 'expose-asidebox'),
+		'#weight' => 0,
+		'#size' => 1,
+		'#suffix' => '<div><img width="300" src="/' . $asidebox_image_preview_url . '" /></div>',
+	);
+	
+	// define the callback function which will be used to save the data
+	$form['#submit'][] = 'asidebox_form_node_type_form_alter_submit';
+}
+
+function asidebox_form_node_type_form_alter_submit($form, $form_state) {
+	// this is the function where we save the end user's input
+	// in regards to the asidebox preference.
+	$values = $form_state['values'];
+	$node_types = variable_get('asidebox_node_types', array('page'));
+	
+	$changed = FALSE;
+	$status = array('@status' => '');
+	if (in_array($values['type'], $node_types) && $values['expose_asidebox'] == '0') {
+		$pos = array_search($values['type'], $node_types);
+		array_splice($node_types, $pos, 1);
+		$changed = TRUE;
+		$status['@status'] = 'disabled';
+	} else {
+		if (!in_array($values['type'], $node_types) && $values['expose_asidebox'] == '1') {
+			array_push($node_types, $values['type']);
+		}
+		$changed = TRUE;
+		$status['@status'] = 'enabled';
+	}
+	
+	#dpm($form_state['values']);
+	#dpm($node_types);
+	variable_set('asidebox_node_types', $node_types);
+	if ($changed) {
+		drupal_set_message(t('Asidebox support has been @status.', $status));
+	}
+}
+
+/**
+ * Implements hook_form_alter().
+ *
+ * Adds a vertical tab section allowing content editors
+ * the ability to enable an 'Asidebox' for a content node, and
+ * either add HTML content or select a pre-existing block.
+ */
+function asidebox_form_alter(&$form, &$form_state, $form_id) {
+
+	// what are the supported node types?
+	$types = variable_get('asidebox_node_types', array('page'));
+	$node_type = str_replace('_node_form', '', $form_id);
+	
+	// but for now, practice altering the form
+	if (in_array($node_type, $types)) {
+		
+		$asidebox = NULL;
+		$block_info = NULL;
+		$block_key = '';
+		if (isset($form_state['node']->vid)) {
+			$vid = $form_state['node']->vid;
+			$asidebox = asidebox_load_asidebox($form_state['node']->nid, $form_state['node']->vid, $form_state['node']->revision);
+		}
+		if ($asidebox == NULL) {
+			$asidebox = asidebox_new_asidebox();
+			$form_state['asidebox'] = NULL;
+		} else {
+			if ($asidebox->status == 'block') {
+				$block = block_load($asidebox->block_module, $asidebox->block_delta);
+				$block_key = $asidebox->bid . '|' . $asidebox->block_module . '|' . $asidebox->block_delta;
+				$block_info = module_invoke($block->module, 'block_info');
+				//dpm($block_info);
+			}
+			$form_state['asidebox'] = $asidebox;
+		}
+		
+		$form['asidebox'] = array(
+			'#type' => 'fieldset',
+			'#title' => t('Aside (Feature) Box'),
+			'#collapsible' => TRUE,
+			'#collapsed' => TRUE,
+			'#weight' => -10,
+			'#attributes' => array('class' => array('asidebox-field')),
+			'#group' => 'additional_settings',
+			'#attached' => array(
+				'js' => array(
+					'vertical-tabs' => drupal_get_path('module', 'asidebox') . '/asidebox.js',
+				),
+			),
+		);
+		$form['asidebox']['asidebox_status'] = array(
+			'#type' => 'select',
+			'#title' => t('Aside Box Status'),
+			'#required' => TRUE,
+			'#default_value' => $asidebox->status,
+			'#options' => array(
+				'disabled' => t('Disabled'),
+				'block' => t('Use Block'),
+				'html' => t('HTML Content'),
+			),
+			'#attributes' => array('id' => 'asidebox-status'),
+			'#description' => variable_get('asidebox.menu_help', t('Disable the aside box, or specify the type of content.')),
+			'#weight' => 0,
+			'#size' => 1,
+		);
+		
+		// TIDBIT source on '_block_rehash'
+		// http://drupal.stackexchange.com/questions/44883/get-a-list-of-all-the-blocks
+		global $theme;
+		$block_list = array('-- Select a block --');
+		$block_rehash = _block_rehash($theme);
+		$callback = function($a, $b) {
+			$stra = strtoupper($a['info']);
+			$strb = strtoupper($b['info']);
+			if ($stra == $strb) {
+				return 0;
+			}
+			return ($stra < $strb) ? -1 : 1;
+		};
+		usort($block_rehash, $callback);
+		foreach($block_rehash as $b) {
+			$bool = _asidebox_block_available($b);
+			if ($bool) {
+				$aKey = $b['bid'] . '|' . $b['module'] . '|' . $b['delta'];
+				$block_list[$aKey] = $b['info'];
+			}
+			# removed the 'visibility' logic test (8/19/2013) dlc
+		}
+		
+		//dpm($blocks);
+		$description = '<strong>NOTE: </strong> While this feature is Beta Testing, we\'re confident in it\'s behavior.<br />'
+			. '<em>Please contact Duke Univeristy Library ITS if you experience any difficulty with the "Select Block" field.</em>';
+		$form['asidebox']['asidebox_block_menu'] = array(
+			'#type' => 'select',
+			'#title' => t('Select Block'),
+			'#description' => t($description),
+			'#options' => $block_list,
+			'#default_value' => $block_key,
+			'#states' => array(
+				'visible' => array(
+					':input[name="asidebox_status"]' => array('value' => 'block'),
+				),
+			),
+			'#attached' => array(
+				'js' => array(
+					drupal_get_path('module', 'asidebox') . '/asidebox-select-field.js' => array('type' => 'file'),
+				),
+			),
+		);
+
+		$form['asidebox']['asidebox_bid'] = array(
+			'#type' => 'hidden',
+			'#default_value' => !empty($block_info) ? $asidebox->bid : '',
+			'#attributes' => array('id' => 'asideboxblockid'),
+		);
+		$form['asidebox']['asidebox_block_delta'] = array(
+			'#type' => 'hidden',
+			'#default_value' => !empty($block_info) ? $asidebox->block_delta : '',
+			'#attributes' => array('id' => 'asideboxblockdelta'),
+		);
+		$form['asidebox']['asidebox_block_module'] = array(
+			'#type' => 'hidden',
+			'#default_value' => !empty($block_info) ? $asidebox->block_module : '',
+			'#attributes' => array('id' => 'asideboxblockmodule'),
+		);
+		$form['asidebox']['html_content'] = array(
+			'#type' => 'text_format',
+			'#title' => t('Enter Feature Box Content'),
+			'#rows' => '10',
+			'#default_value' => $asidebox->body_value,
+			'#states' => array(
+				'visible' => array(
+					':input[name="asidebox_status"]' => array('value' => 'html'),
+				),
+			),
+		);
+		$form['asidebox']['html_title'] = array(
+			'#type' => 'textfield',
+			'#size' => 40,
+			'#title' => t('Optional Title'),
+			'#description' => t('This will appear as on H3 element on the rendered page'),
+			'#default_value' => isset($asidebox->body_title) ? $asidebox->body_title : '',
+			'#states' => array(
+				'visible' => array(
+					':input[name="asidebox_status"]' => array('value' => 'html'),
+				),
+			),
+		);
+		$form['#submit'][] = 'asidebox_form_submit_handler';
+	}
+}
+
+/**
+ * sumbit handler to process the 'asidebox' data entered 
+ * by the end user.
+ */
+function asidebox_form_submit_handler($form, $form_state) {
+	// capture the node id and revision id
+	$nid = $form_state['values']['nid'];
+	$vid = $form_state['values']['vid'];
+	
+	if ($form_state['asidebox']) {
+		$record = $form_state['asidebox'];
+	} else {
+		$record = new stdclass();
+		$record->nid = $nid;
+		$record->vid = $vid;
+	}
+	$asidebox_status = $form_state['values']['asidebox_status'];
+	
+	$record->status = $asidebox_status;
+	
+	if ($asidebox_status == 'html') {
+		$record->body_value = $form_state['values']['html_content']['value'];
+		$record->body_format = $form_state['values']['html_content']['format'];
+		$record->body_title = $form_state['values']['html_title'];
+
+	} elseif ($asidebox_status == 'block') {
+		$record->bid = $form_state['values']['asidebox_bid'];
+		$record->block_module = $form_state['values']['asidebox_block_module'];
+		$record->block_delta = $form_state['values']['asidebox_block_delta'];
+	}
+	// TODO add support for menus(?)
+
+	if ($form_state['asidebox']) {
+		$form_state['node']->asidebox = $record;
+		$form_state['node']->asidebox->is_new = $form_state['node']->revision;
+	} else {
+		$form_state['node']->asidebox = $record;
+		$form_state['node']->asidebox->is_new = TRUE;
+	}
+	
+}
+
+/**
+ * implements hook_node_load($node)
+ */
+function asidebox_node_load($nodes, $types) {
+	// what are the supported node types?
+	$types_we_want = variable_get('asidebox_node_types', array('page'));
+	if (count(array_intersect($types_we_want, $types))) {
+		foreach ($nodes as $node) {
+			$node->asidebox = asidebox_load_asidebox($node->nid, $node->vid);
+		}
+	}
+}
+
+/**
+ * implements hook_node_insert($node)
+ */
+function asidebox_node_insert($node) {
+	if (isset($node->asidebox)) {
+		if ($node->asidebox->is_new) {
+			$node->asidebox->vid = $node->vid;
+			$node->asidebox->nid = $node->nid;
+			drupal_write_record('asidebox', $node->asidebox);
+		}
+	}
+}
+
+/**
+ * implements hook_node_update($node)
+ */
+function asidebox_node_update($node) {
+	// in the event the user is adding an asidebox
+	// to an existing node (page, etc)
+	if (isset($node->asidebox)) {
+		if ($node->vid != $node->asidebox->vid) {
+			$node->asidebox->vid = $node->vid;
+			$node->asidebox->nid = $node->nid;
+			drupal_write_record('asidebox', $node->asidebox);
+		} else {
+			drupal_write_record('asidebox', $node->asidebox, 'vid');
+		}
+	}
+}
+
+/**
+ * implements hook_node_delete()
+ * ..to remove the record in {asidebox} that is related to this node
+ */
+function asidebox_node_delete($node) {
+	#$vid = $node->vid;
+	$nid = $node->nid;
+	$num_deleted = db_delete('asidebox')
+		->condition('nid', $nid)
+		->execute();
+}
+
+function asidebox_load_asidebox($nid, $vid, $node_revision = FALSE) {
+	// for simple queries, db_query is faster than db_select
+	// http://drupal.org/node/1881146#comment-6907576
+
+	// modified to account for node revisions
+	//if (variable_get('asidebox.follow_new_revisions', 0)) {
+	$result = db_query('select ab.* from {asidebox} ab where nid = :nid and vid = :vid', array(':nid' => $nid, ':vid' => $vid));
+	$asidebox = $result->fetchObject();
+
+	return $asidebox;
+}
+
+function asidebox_new_asidebox() {
+	$o = new stdclass();
+	$o->nid = null;
+	$o->vid = null;
+	$o->status = 'disabled';
+	$o->body_value = '';
+	$o->body_format = null;
+	$o->bid = null;
+
+	return $o;
+}
+
+/**
+ * Implements hook_node_view
+ */
+function asidebox_node_view($node, $view_mode, $langcode) {
+	$asidebox = asidebox_load_asidebox($node->nid, $node->vid);
+	if ($asidebox != null) {
+		if ($asidebox->status == 'html') {
+			$node->content['asidebox_main'] = array(
+				'#theme' => 'asidebox',
+				'#body' => $asidebox->body_value,
+				'#title' => $asidebox->body_title,
+				'#weight' => -1,	// make sure it's at the top of the rendering order
+			);
+		} elseif ($asidebox->status == 'block') {
+			// thanks to this tip at:
+			// http://www.computerminds.co.uk/drupal-code/render-block-programmatically
+			// http://drupal.org/node/957038#comment-4856536
+			$block = block_load($asidebox->block_module, $asidebox->block_delta);
+			
+			# get the block's render array...
+			$render_array = _block_get_renderable_array(_block_render_blocks(array($block)));
+			
+			# then add it to the node's content...
+			$node->content['asidebox_main'] = array(
+				'#theme' => 'asidebox',
+				'#body' => render($render_array),
+				'#weight' => -1,
+			);
+		}
+	}
+}
+
+/**
+ * Determines if $block is visible and can be selected through the node
+ * content form
+ */
+function _asidebox_block_available($block) {
+	$type_passes = FALSE;
+	$vis_passes = FALSE;
+	
+	$acceptable_block_types = variable_get('asidebox.block_types', array());
+	$type_passes = in_array($block['module'], $acceptable_block_types);
+
+	$filter_vis = variable_get('asidebox.filter_visibility', 0);
+
+	$vis_passes = ($filter_vis == 0) || ($filter_vis && $block['visibililty']);
+	return $type_passes && $vis_passes;
+}
